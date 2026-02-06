@@ -1,28 +1,39 @@
-class UserProfile:
-    def __init__(
-        self,
-        tg_id: int,
-        weight: float,
-        height: float,
-        age: int,
-        daily_activity: int,
-        city: str,
-        target_calories: int | None = None,
-    ):
-        self.tg_id = tg_id
-        self.weight = weight
-        self.height = height
-        self.age = age
-        self.daily_activity = daily_activity
-        self.city = city
-        if target_calories:
-            self.target_calories = target_calories
-        else:
-            self.target_calories = self._target_calories_calc()
+from datetime import datetime
 
-    def _target_calories_calc(self) -> int:
-        return int(10 * self.weight + 6.25 * self.height - 5 * self.age + 300)
+from sqlmodel import Field, SQLModel
 
 
-def DailyActivity():
-    pass
+class User(SQLModel, table=True):
+    tg_id: int = Field(primary_key=True)
+    weight: float
+    height: float
+    age: int
+    daily_activity: int
+    city: str
+    target_calories: int | None = None
+
+
+class WaterLog(SQLModel, table=True):
+    id: int | None = Field(default=None, primary_key=True)
+    tg_id: int = Field(foreign_key="user.tg_id")
+    ts: datetime
+    volume_ml: int
+
+
+class FoodLog(SQLModel, table=True):
+    id: int | None = Field(default=None, primary_key=True)
+    tg_id: int = Field(foreign_key="user.tg_id")
+    ts: datetime
+    product: str
+    grams: int
+    calories: float
+
+
+class WorkoutLog(SQLModel, table=True):
+    id: int | None = Field(default=None, primary_key=True)
+    tg_id: int = Field(foreign_key="user.tg_id")
+    ts: datetime
+    type: str
+    minutes: int
+    calories: float
+    water_ml: int
