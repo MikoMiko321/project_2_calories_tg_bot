@@ -17,7 +17,7 @@ def get_session() -> Session:
 
 def save_user(user: User):
     with get_session() as s:
-        s.add(user)
+        s.merge(user)
         s.commit()
 
 

@@ -29,7 +29,7 @@ class Profile(StatesGroup):
     city = State()
 
 
-# Главное меню
+# ---------- Меню ----------
 
 main_menu = ReplyKeyboardMarkup(
     keyboard=[
@@ -44,7 +44,27 @@ main_menu = ReplyKeyboardMarkup(
 )
 
 
-# хендлеры
+# ---------- Общая логика ----------
+
+
+async def start_profile_flow(m: Message, state: FSMContext):
+    await state.clear()
+    await m.answer("Введите ваш вес (в кг):")
+    await state.set_state(Profile.weight)
+
+
+def format_profile(user: User) -> str:
+    return (
+        "📋 Текущий профиль:\n\n"
+        f"Вес: {user.weight} кг\n"
+        f"Рост: {user.height} см\n"
+        f"Возраст: {user.age}\n"
+        f"Активность: {user.daily_activity} мин/день\n"
+        f"Город: {user.city}\n"
+    )
+
+
+# ---------- Handlers ----------
 
 
 @dp.message(Command("start"))
@@ -57,9 +77,21 @@ async def start(m: Message):
 
 
 @dp.message(Command("set_profile"))
-async def set_profile(m: Message, state: FSMContext):
-    await m.answer("Введите ваш вес (в кг):")
-    await state.set_state(Profile.weight)
+async def cmd_set_profile(m: Message, state: FSMContext):
+    await start_profile_flow(m, state)
+
+
+@dp.message(lambda m: m.text == "⚙️ Редактировать профиль")
+async def menu_set_profile(m: Message, state: FSMContext):
+    user = get_user(m.from_user.id)
+
+    if user:
+        await m.answer(format_profile(user))
+
+    await start_profile_flow(m, state)
+
+
+# ---------- FSM шаги ----------
 
 
 @dp.message(Profile.weight)
@@ -105,10 +137,10 @@ async def profile_city(m: Message, state: FSMContext):
     save_user(user)
 
     await state.clear()
-    await m.answer("Профиль создан ✅", reply_markup=main_menu)
+    await m.answer("Профиль сохранён ✅", reply_markup=main_menu)
 
 
-# обработка команд
+# ---------- Команды-заглушки ----------
 
 
 @dp.message(Command("log_water"))
@@ -134,11 +166,6 @@ async def check_progress(m: Message):
 @dp.message(Command("last_week_progress"))
 async def last_week_progress(m: Message):
     await m.answer("Прогресс за неделю — скоро")
-
-
-@dp.message(lambda m: m.text == "✏️ Редактировать профиль")
-async def edit_profile(m: Message, state: FSMContext):
-    await m.answer("Редактирование профиля: /set_profile")
 
 
 # ---------- Run ----------
