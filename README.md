@@ -1,17 +1,9 @@
-users
+Для корректной локальной работы необходимо создать .env
 
-tg_id (PK)
+```
+BOT_TOKEN=
+OPEN_WEATHER_MAP_API_KEY=
+OPENAI_API_KEY=
+```
 
-weight, height, age, daily_activity, city, target_calories
-
-water_logs
-
-id (PK), tg_id (FK), ts, volume_ml
-
-food_logs
-
-id (PK), tg_id (FK), ts, product, grams, calories
-
-workout_logs
-
-id (PK), tg_id (FK), ts, type, minutes, calories, water_ml
+Да, я решил использовать для простоты промпты к гпт для получения калорий, потому что апи ОпенФуд меня огорчил немного. Апи для получения погоды я использую как и в предыдущем задании. Он должен работать со всеми основными городами если писать их по английски.
