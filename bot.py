@@ -1,5 +1,6 @@
 import logging
 import os
+from datetime import datetime, timedelta
 
 from aiogram import Bot, Dispatcher
 from aiogram.filters import Command
@@ -8,8 +9,17 @@ from aiogram.fsm.state import State, StatesGroup
 from aiogram.types import KeyboardButton, Message, ReplyKeyboardMarkup
 from dotenv import load_dotenv
 
-from db import get_user, save_user
-from models import User
+from db import (
+    get_food_logs,
+    get_user,
+    get_water_logs,
+    get_workout_logs,
+    save_food,
+    save_user,
+    save_water,
+    save_workout,
+)
+from models import FoodLog, User, WaterLog, WorkoutLog
 
 load_dotenv()
 logging.basicConfig(level=logging.INFO)
@@ -44,7 +54,7 @@ main_menu = ReplyKeyboardMarkup(
 )
 
 
-# ---------- Общая логика ----------
+# ---------- Общие функции ----------
 
 
 async def start_profile_flow(m: Message, state: FSMContext):
@@ -64,7 +74,7 @@ def format_profile(user: User) -> str:
     )
 
 
-# ---------- Handlers ----------
+# ---------- Start / Profile ----------
 
 
 @dp.message(Command("start"))
@@ -84,10 +94,8 @@ async def cmd_set_profile(m: Message, state: FSMContext):
 @dp.message(lambda m: m.text == "⚙️ Редактировать профиль")
 async def menu_set_profile(m: Message, state: FSMContext):
     user = get_user(m.from_user.id)
-
     if user:
         await m.answer(format_profile(user))
-
     await start_profile_flow(m, state)
 
 
@@ -140,32 +148,125 @@ async def profile_city(m: Message, state: FSMContext):
     await m.answer("Профиль сохранён ✅", reply_markup=main_menu)
 
 
-# ---------- Команды-заглушки ----------
+# ---------- 💧 Вода ----------
+
+
+async def water_entry(m: Message):
+    await m.answer("Введи: /log_water <мл>")
+
+
+@dp.message(lambda m: m.text == "💧 Вода")
+async def menu_water(m: Message):
+    await water_entry(m)
 
 
 @dp.message(Command("log_water"))
 async def log_water(m: Message):
-    await m.answer("Логирование воды — скоро")
+    parts = m.text.split(maxsplit=1)
+    if len(parts) < 2:
+        await water_entry(m)
+        return
+
+    try:
+        ml = int(parts[1])
+    except Exception:
+        await m.answer("Пример: /log_water 250")
+        return
+
+    save_water(
+        WaterLog(
+            tg_id=m.from_user.id,
+            ts=datetime.utcnow(),
+            volume_ml=ml,
+        )
+    )
+    await m.answer(f"💧 Записал {ml} мл")
+
+
+# ---------- 🍎 Еда (упрощённо) ----------
+
+
+@dp.message(lambda m: m.text == "🍎 Прием пищи")
+async def menu_food(m: Message):
+    await m.answer("Введи: /log_food <продукт> <граммы> <ккал>")
 
 
 @dp.message(Command("log_food"))
 async def log_food(m: Message):
-    await m.answer("Логирование еды — скоро")
+    parts = m.text.split()
+    if len(parts) < 4:
+        await m.answer("Пример: /log_food банан 150 135")
+        return
+
+    _, product, grams, calories = parts
+    save_food(
+        FoodLog(
+            tg_id=m.from_user.id,
+            ts=datetime.utcnow(),
+            product=product,
+            grams=int(grams),
+            calories=float(calories),
+        )
+    )
+    await m.answer("🍎 Записал приём пищи")
+
+
+# ---------- 🏃 Тренировки ----------
+
+
+@dp.message(lambda m: m.text == "🏃 Тренировки")
+async def menu_workout(m: Message):
+    await m.answer("Введи: /log_workout <тип> <мин> <ккал>")
 
 
 @dp.message(Command("log_workout"))
 async def log_workout(m: Message):
-    await m.answer("Логирование тренировок — скоро")
+    parts = m.text.split()
+    if len(parts) < 4:
+        await m.answer("Пример: /log_workout бег 30 300")
+        return
+
+    _, kind, minutes, calories = parts
+    save_workout(
+        WorkoutLog(
+            tg_id=m.from_user.id,
+            ts=datetime.utcnow(),
+            type=kind,
+            minutes=int(minutes),
+            calories=float(calories),
+            water_ml=0,
+        )
+    )
+    await m.answer("🏃 Тренировка записана")
 
 
+# ---------- 📊 Прогресс ----------
+
+
+@dp.message(lambda m: m.text == "📊 Прогресс за сегодня")
 @dp.message(Command("check_progress"))
-async def check_progress(m: Message):
-    await m.answer("Прогресс за сегодня — скоро")
+async def today_progress(m: Message):
+    now = datetime.utcnow()
+    start = now.replace(hour=0, minute=0, second=0)
+
+    water = sum(w.volume_ml for w in get_water_logs(m.from_user.id, start, now))
+    food = sum(f.calories for f in get_food_logs(m.from_user.id, start, now))
+    workout = sum(w.calories for w in get_workout_logs(m.from_user.id, start, now))
+
+    await m.answer(f"📊 Сегодня:\n💧 Вода: {water} мл\n🍎 Калории: {food} ккал\n🏃 Сожжено: {workout} ккал")
 
 
+@dp.message(lambda m: m.text == "📈 Прогресс за неделю")
 @dp.message(Command("last_week_progress"))
-async def last_week_progress(m: Message):
-    await m.answer("Прогресс за неделю — скоро")
+async def week_progress(m: Message):
+    now = datetime.utcnow()
+    start = now - timedelta(days=7)
+
+    water = sum(w.volume_ml for w in get_water_logs(m.from_user.id, start, now))
+    food = sum(f.calories for f in get_food_logs(m.from_user.id, start, now))
+    workout = sum(w.calories for w in get_workout_logs(m.from_user.id, start, now))
+
+    await m.answer(f"📈 За 7 дней:\n💧 Вода: {water} мл\n🍎 Калории: {food} ккал\n🏃 Сожжено: {workout} ккал")
 
 
 # ---------- Run ----------
