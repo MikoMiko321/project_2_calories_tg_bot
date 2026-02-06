@@ -7,7 +7,7 @@ import os
 from collections import defaultdict
 from datetime import datetime, timedelta, timezone
 
-from aiogram import Bot, Dispatcher
+from aiogram import BaseMiddleware, Bot, Dispatcher
 from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
@@ -33,6 +33,16 @@ logging.basicConfig(level=logging.INFO)
 
 bot = Bot(os.getenv("BOT_TOKEN"))
 dp = Dispatcher()
+
+
+class LogMiddleware(BaseMiddleware):
+    async def __call__(self, handler, event, data):
+        if isinstance(event, Message) and event.text:
+            logging.info("cmd from %s: %s", event.from_user.id, event.text)
+        return await handler(event, data)
+
+
+dp.message.middleware(LogMiddleware())
 
 
 class Profile(StatesGroup):

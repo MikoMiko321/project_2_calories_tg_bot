@@ -38,8 +38,13 @@ def get_calorie_value(food: str) -> float | None:
         model="gpt-4o-mini",
         input=(f'Сколько килокалорий в 1 грамме продукта "{food}"? Ответь одним числом, например: 0.89'),
     )
+    usage = resp.usage
+    logger.info(f"OpenAI usage: in={usage.input_tokens}, out={usage.output_tokens}, total={usage.total_tokens}")
 
     try:
-        return float(resp.output_text.strip())
+        value = float(resp.output_text.strip())
+        logger.info(f'Calories parsed: {value} kcal/g for "{food}"')
+        return value
     except Exception:
+        logger.warning(f'Failed to parse calories for "{food}"')
         return None
