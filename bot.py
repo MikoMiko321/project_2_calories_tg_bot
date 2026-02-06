@@ -84,14 +84,14 @@ main_menu = ReplyKeyboardMarkup(
 
 def calc_water_goal_ml(
     user: User,
-    temp: float | None,
+    temperature: float | None,
     workout_minutes: int = 0,
 ) -> tuple[int, str]:
     goal = int(user.weight * 30 + (user.daily_activity // 30) * 500)
     goal += workout_minutes * 10
     reason = "стандартный расход воды"
 
-    if temp is not None and temp > 25:
+    if temperature is not None and temperature > 25:
         goal += 700
         reason = "повышенный расход воды"
 
@@ -104,11 +104,21 @@ def calc_calorie_goal(user: User) -> int:
 
 
 @dp.message(Command("start"))
-async def start(m: Message):
+async def start(m: Message, state: FSMContext):
+    await state.clear()
     if get_user(m.from_user.id) is None:
         await m.answer("Сначала создай профиль: /set_profile")
         return
     await m.answer("Меню:", reply_markup=main_menu)
+
+
+from aiogram.types import ReplyKeyboardRemove
+
+
+@dp.message(Command("ui_reset"))
+async def reset(m: Message, state: FSMContext):
+    await state.clear()
+    await m.answer("Состояние интерфейса сброшено. Начнём заново.", reply_markup=ReplyKeyboardRemove())
 
 
 @dp.message(Command("set_profile"))
@@ -142,13 +152,14 @@ async def p_age(m: Message, state: FSMContext):
 
 @dp.message(Profile.activity)
 async def p_activity(m: Message, state: FSMContext):
-    await state.update_data(activity=int(m.text))
+    await state.update_data(daily_activity=int(m.text))
     await m.answer("Город:")
     await state.set_state(Profile.city)
 
 
 @dp.message(Profile.city)
 async def p_city(m: Message, state: FSMContext):
+    await state.update_data(city=m.text)
     data = await state.get_data()
     save_user(User(tg_id=m.from_user.id, **data))
     await state.clear()
@@ -159,16 +170,31 @@ async def p_city(m: Message, state: FSMContext):
 @dp.message(lambda m: m.text == "💧 Вода")
 async def water_start(m: Message, state: FSMContext):
     await state.clear()
-    await m.answer("Сколько мл воды выпил (мл)?")
+    await m.answer("Сколько воды выпил (мл)?")
     await state.set_state(WaterFSM.volume)
 
 
 @dp.message(WaterFSM.volume)
 async def water_save(m: Message, state: FSMContext):
     ml = int(m.text)
+
+    user = get_user(m.from_user.id)
+    now = datetime.now(timezone.utc)
+    start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+
+    temperature = get_current_weather(user.city)
+
+    workout_minutes = sum(w.minutes for w in get_workout_logs(user.tg_id, start, now))
+    water_goal, _ = calc_water_goal_ml(user, temperature, workout_minutes)
     save_water(WaterLog(tg_id=m.from_user.id, ts=datetime.now(timezone.utc), volume_ml=ml))
+
+    current_water = sum(w.volume_ml for w in get_water_logs(user.tg_id, start, now))
+    if current_water < water_goal:
+        comment = f"Не забудьте выпить еще {water_goal - current_water} мл. воды сегодня."
+    else:
+        comment = "Вы уже достаточно выпили на сегодня."
     await state.clear()
-    await m.answer(f"💧 Записал {ml} мл", reply_markup=main_menu)
+    await m.answer(f"💧 Записал {ml} мл. {comment}", reply_markup=main_menu)
 
 
 @dp.message(Command("log_food"))
@@ -239,7 +265,10 @@ async def workout_minutes(m: Message, state: FSMContext):
         )
     )
     await state.clear()
-    await m.answer("🏃 Тренировка записана", reply_markup=main_menu)
+    await m.answer(
+        f"🏃 Сожжено {calories} ккал. Тренировка записана. Дополнительно выпейте {minutes * 10} мл воды.",
+        reply_markup=main_menu,
+    )
 
 
 @dp.message(Command("check_progress"))
@@ -249,10 +278,10 @@ async def progress_today(m: Message):
     now = datetime.now(timezone.utc)
     start = now.replace(hour=0, minute=0, second=0, microsecond=0)
 
-    temp = get_current_weather(user.city)
+    temperature = get_current_weather(user.city)
 
     workout_minutes = sum(w.minutes for w in get_workout_logs(user.tg_id, start, now))
-    water_goal, mode = calc_water_goal_ml(user, temp, workout_minutes)
+    water_goal, mode = calc_water_goal_ml(user, temperature, workout_minutes)
     calorie_goal = calc_calorie_goal(user)
 
     water = sum(w.volume_ml for w in get_water_logs(user.tg_id, start, now))
@@ -261,7 +290,7 @@ async def progress_today(m: Message):
 
     await m.answer(
         f"📊 Прогресс\n\n"
-        f"🌡 {user.city}: {temp}°C ({mode})\n\n"
+        f"🌡 {user.city}: {temperature}°C ({mode})\n\n"
         f"💧 {water}/{water_goal} мл\n"
         f"🍎 {food}/{calorie_goal} ккал\n"
         f"🏃 Сожжено: {workout} ккал\n"

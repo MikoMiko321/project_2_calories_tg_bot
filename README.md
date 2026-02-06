@@ -12,3 +12,11 @@ OPENAI_API_KEY=
 ```
 poetry export -f requirements.txt --without-hashes -o requirements.txt
 ```
+
+Создание и запуск контейнера
+```
+docker build -t tg-bot .
+docker run --rm --env-file .env tg-bot
+```
+
+Для целей отладки введена служебная команда сбрасывающая интерфейс в ТГ - /ui_reset
