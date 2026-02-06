@@ -33,13 +33,13 @@ def get_current_weather(city: str) -> float | None:
         return None
 
 
-def get_calorie_value(food: str) -> int | None:
+def get_calorie_value(food: str) -> float | None:
     resp = client.responses.create(
         model="gpt-4o-mini",
-        input=(f'Сколько килокалорий в 1 грамме продукта "{food}"? Ответь ТОЛЬКО ОДНИМ ЧИСЛОМ.'),
+        input=(f'Сколько килокалорий в 1 грамме продукта "{food}"? Ответь одним числом, например: 0.89'),
     )
 
     try:
-        return int(float(resp.output_text.strip()))
+        return float(resp.output_text.strip())
     except Exception:
         return None
